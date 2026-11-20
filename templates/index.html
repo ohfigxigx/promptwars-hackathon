@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyllabusOS — CrunchTutor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script>tailwind.config={theme:{extend:{colors:{brand:'#6366f1',brandDark:'#4f46e5',surface:'#f8fafc',surfaceDark:'#1e293b'}}}}</script>
+    <style>
+        .tab-active{color:#6366f1;border-bottom:2px solid #6366f1;font-weight:600}
+        .topic-mastered{text-decoration:line-through;opacity:.55}
+        .loader{border:3px solid #e2e8f0;border-top:3px solid #6366f1;border-radius:50%;width:24px;height:24px;animation:spin .7s linear infinite;display:inline-block}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .fade-in{animation:fadeIn .3s ease-in}
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .markdown-body h1{font-size:1.5rem;font-weight:700;margin:1rem 0 .5rem}
+        .markdown-body h2{font-size:1.25rem;font-weight:600;margin:.75rem 0 .4rem}
+        .markdown-body h3{font-size:1.1rem;font-weight:600;margin:.5rem 0 .3rem}
+        .markdown-body p{margin:.4rem 0}
+        .markdown-body ul{list-style:disc;margin-left:1.5rem;margin-top:.3rem;margin-bottom:.3rem}
+        .markdown-body ol{list-style:decimal;margin-left:1.5rem;margin-top:.3rem;margin-bottom:.3rem}
+        .markdown-body li{margin:.15rem 0}
+        .markdown-body strong{font-weight:700}
+        .markdown-body em{font-style:italic}
+        .markdown-body code{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:.9em}
+        .markdown-body pre{background:#f1f5f9;padding:.75rem;border-radius:6px;overflow-x:auto;margin:.5rem 0}
+        .markdown-body table{border-collapse:collapse;width:100%;margin:.5rem 0}
+        .markdown-body th,.markdown-body td{border:1px solid #e2e8f0;padding:.4rem .6rem;text-align:left}
+        .markdown-body th{background:#f1f5f9;font-weight:600}
+        .markdown-body blockquote{border-left:3px solid #6366f1;padding-left:.75rem;margin:.5rem 0;color:#64748b}
+        #sidebar::-webkit-scrollbar{width:6px}
+        #sidebar::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+    </style>
+</head>
+<body class="h-full bg-surface text-gray-800 font-sans">
+
+<!-- ═══════════════════ ONBOARDING MODAL ═══════════════════ -->
+<div id="onboarding" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Student Setup">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8 fade-in">
+    <div class="text-center mb-6">
+      <h1 class="text-3xl font-bold text-brand">📚 SyllabusOS</h1>
+      <p class="text-gray-500 mt-1 text-sm">CrunchTutor — Your Personalized AI Learning Agent</p>
+    </div>
+    <form id="onboardForm" class="space-y-4">
+      <div>
+        <label for="studentName" class="block text-sm font-medium mb-1">Your Name</label>
+        <input id="studentName" type="text" required placeholder="e.g., Priya Sharma" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand focus:outline-none" aria-required="true">
+      </div>
+      <div>
+        <label for="education" class="block text-sm font-medium mb-1">Education / Degree</label>
+        <input id="education" type="text" required placeholder="e.g., B.Tech CSE, 2nd Year" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-brand focus:outline-none" aria-required="true">
+      </div>
+      <div>
+        <label for="syllabusInput" class="block text-sm font-medium mb-1">Paste Your Syllabus</label>
+        <textarea id="syllabusInput" rows="6" placeholder="Paste your raw syllabus text here..." class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand focus:outline-none resize-none" aria-label="Syllabus text"></textarea>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" onclick="loadSample('ds')" class="flex-1 text-sm border border-brand text-brand rounded-lg py-2 hover:bg-indigo-50 transition" aria-label="Load sample Data Structures syllabus">📂 Data Structures</button>
+        <button type="button" onclick="loadSample('physics')" class="flex-1 text-sm border border-brand text-brand rounded-lg py-2 hover:bg-indigo-50 transition" aria-label="Load sample Engineering Physics syllabus">📂 Engg. Physics</button>
+      </div>
+      <button type="submit" id="startBtn" class="w-full bg-brand text-white rounded-lg py-3 font-semibold hover:bg-brandDark transition disabled:opacity-50" aria-label="Start learning">
+        🚀 Start Learning
+      </button>
+      <p id="onboardError" class="text-red-500 text-sm text-center hidden"></p>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════ MAIN APP LAYOUT ═══════════════════ -->
+<div id="appShell" class="hidden h-full flex flex-col">
+
+  <!-- Top Bar -->
+  <header class="bg-white border-b px-4 py-3 flex items-center justify-between shrink-0 shadow-sm">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl font-bold text-brand">📚 SyllabusOS</h1>
+      <span id="headerSubject" class="text-sm text-gray-500"></span>
+    </div>
+    <div class="flex items-center gap-4 text-sm">
+      <span id="headerName" class="text-gray-600"></span>
+      <button onclick="resetApp()" class="text-red-400 hover:text-red-600 text-xs" aria-label="Reset and start over">Reset</button>
+    </div>
+  </header>
+
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- ═══ LEFT SIDEBAR — Syllabus Tree ═══ -->
+    <aside id="sidebar" class="w-72 bg-white border-r overflow-y-auto shrink-0 flex flex-col" aria-label="Syllabus navigation">
+      <div class="p-3 border-b">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="font-semibold text-sm text-gray-700">Syllabus Tree</h2>
+          <button onclick="openAddTopic()" class="text-xs bg-brand text-white px-2 py-1 rounded hover:bg-brandDark" aria-label="Add a new topic">+ Add</button>
+        </div>
+        <!-- Total study time -->
+        <div class="text-xs text-gray-400" id="totalStudyTime">Total study time: 0 min</div>
+      </div>
+      <div id="syllabusTree" class="p-2 text-sm flex-1" role="tree" aria-label="Chapters and topics"></div>
+    </aside>
+
+    <!-- ═══ MAIN CONTENT ═══ -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- Active topic banner -->
+      <div id="topicBanner" class="bg-indigo-50 border-b px-5 py-3 shrink-0 hidden">
+        <div class="flex items-center justify-between">
+          <div>
+            <span class="text-xs text-indigo-400 font-medium" id="bannerChapter"></span>
+            <h2 class="text-lg font-bold text-gray-800" id="bannerTopic"></h2>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="topicTimer" class="text-sm font-mono text-indigo-500">⏱ 0:00</span>
+            <button onclick="toggleMastered()" id="masteredBtn" class="text-xs border border-green-400 text-green-600 px-2 py-1 rounded hover:bg-green-50" aria-label="Toggle mastered status">✓ Mark Mastered</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Bar -->
+      <div id="tabBar" class="border-b bg-white px-4 shrink-0 hidden" role="tablist" aria-label="AI Agent Tabs">
+        <div class="flex gap-1 overflow-x-auto">
+          <button class="tab-btn px-4 py-3 text-sm whitespace-nowrap hover:text-brand transition" data-tab="diagnose" role="tab" aria-selected="false">🩺 Diagnostic</button>
+          <button class="tab-btn px-4 py-3 text-sm whitespace-nowrap hover:text-brand transition" data-tab="story" role="tab" aria-selected="false">📖 Story & Diagram</button>
+          <button class="tab-btn px-4 py-3 text-sm whitespace-nowrap hover:text-brand transition" data-tab="variants" role="tab" aria-selected="false">🔢 Variants</button>
+          <button class="tab-btn px-4 py-3 text-sm whitespace-nowrap hover:text-brand transition" data-tab="checker" role="tab" aria-selected="false">✅ Answer Checker</button>
+          <button class="tab-btn px-4 py-3 text-sm whitespace-nowrap hover:text-brand transition" data-tab="summary" role="tab" aria-selected="false">📓 Revision Book</button>
+        </div>
+      </div>
+
+      <!-- Tab Panels -->
+      <div id="tabContent" class="flex-1 overflow-y-auto p-6">
+        <!-- Empty state -->
+        <div id="emptyState" class="flex flex-col items-center justify-center h-full text-gray-400">
+          <div class="text-6xl mb-4">👈</div>
+          <p class="text-lg font-medium">Select a topic from the sidebar</p>
+          <p class="text-sm mt-1">to unlock all five AI learning agents</p>
+        </div>
+
+        <!-- PANEL: Diagnostic -->
+        <div id="panel-diagnose" class="tab-panel hidden fade-in" role="tabpanel">
+          <div class="max-w-2xl mx-auto">
+            <h3 class="text-xl font-bold mb-1">🩺 Diagnostic & Gap Check</h3>
+            <p class="text-gray-500 text-sm mb-4">3-question MCQ to assess your readiness. Only your weak spots will be highlighted.</p>
+            <button onclick="runDiagnostic()" id="diagStartBtn" class="bg-brand text-white px-5 py-2 rounded-lg hover:bg-brandDark transition disabled:opacity-50" aria-label="Start diagnostic quiz">Generate Quiz</button>
+            <div id="diagLoading" class="mt-4 hidden"><span class="loader"></span> <span class="text-sm text-gray-500 ml-2">Generating questions…</span></div>
+            <div id="diagQuiz" class="mt-4 space-y-5 hidden"></div>
+            <button onclick="submitDiagnostic()" id="diagSubmitBtn" class="mt-4 bg-green-500 text-white px-5 py-2 rounded-lg hover:bg-green-600 transition hidden" aria-label="Submit answers">Submit Answers</button>
+            <div id="diagAnalyzing" class="mt-4 hidden"><span class="loader"></span> <span class="text-sm text-gray-500 ml-2">Analyzing your answers…</span></div>
+            <div id="diagResult" class="mt-4 hidden"></div>
+          </div>
+        </div>
+
+        <!-- PANEL: Story -->
+        <div id="panel-story" class="tab-panel hidden fade-in" role="tabpanel">
+          <div class="max-w-3xl mx-auto">
+            <h3 class="text-xl font-bold mb-1">📖 Story Derivation & Diagram</h3>
+            <p class="text-gray-500 text-sm mb-4">Complex concepts explained as intuitive, memorable stories with visual diagrams.</p>
+            <button onclick="runStory()" id="storyBtn" class="bg-brand text-white px-5 py-2 rounded-lg hover:bg-brandDark transition disabled:opacity-50" aria-label="Generate story explanation">Generate Story</button>
+            <div id="storyLoading" class="mt-4 hidden"><span class="loader"></span> <span class="text-sm text-gray-500 ml-2">Crafting your story…</span></div>
+            <div id="storyResult" class="mt-6 hidden"></div>
+          </div>
+        </div>
+
+        <!-- PANEL: Variants -->
+        <div id="panel-variants" class="tab-panel hidden fade-in" role="tabpanel">
+          <div class="max-w-2xl mx-auto">
+            <h3 class="text-xl font-bold mb-1">🔢 Question Variant Generator</h3>
+            <p class="text-gray-500 text-sm mb-4">Enter any question or problem to get 3 practice variants (Easy, Medium, Exam-Trap).</p>
+            <textarea id="variantInput" rows="3" placeholder="Type or paste a question here…" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand focus:outline-none resize-none mb-3" aria-label="Enter a question for variants"></textarea>
+            <button onclick="runVariants()" id="variantsBtn" class="bg-brand text-white px-5 py-2 rounded-lg hover:bg-brandDark transition disabled:opacity-50" aria-label="Generate variants">Generate Variants</button>
+            <div id="variantsLoading" class="mt-4 hidden"><span class="loader"></span> <span class="text-sm text-gray-500 ml-2">Creating variants…</span></div>
+            <div id="variantsResult" class="mt-4 hidden space-y-4"></div>
+          </div>
+        </div>
+
+        <!-- PANEL: Answer Checker -->
+        <div id="panel-checker" class="tab-panel hidden fade-in" role="tabpanel">
+          <div class="max-w-2xl mx-auto">
+            <h3 class="text-xl font-bold mb-1">✅ Answer Mistake Checker</h3>
+            <p class="text-gray-500 text-sm mb-4">Enter a question + your answer (typed or photo) to get exact mistake pinpointing.</p>
+            <div class="space-y-3">
+              <div>
+                <label for="checkerQuestion" class="block text-sm font-medium mb-1">Question</label>
+                <textarea id="checkerQuestion" rows="2" placeholder="Enter the question…" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand focus:outline-none resize-none" aria-label="Enter the question"></textarea>
+              </div>
+              <div>
+                <label for="checkerAnswer" class="block text-sm font-medium mb-1">Your Answer (typed)</label>
+                <textarea id="checkerAnswer" rows="3" placeholder="Type your solution here…" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand focus:outline-none resize-none" aria-label="Type your answer"></textarea>
+              </div>
+              <div class="text-center text-xs text-gray-400 font-medium">— OR —</div>
+              <div>
+                <label for="checkerImage" class="block text-sm font-medium mb-1">Upload Handwritten Solution (Photo)</label>
+                <input id="checkerImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="block w-full text-sm border rounded-lg p-2 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-brand file:font-medium" aria-label="Upload a photo of your handwritten answer">
+                <div id="imagePreview" class="mt-2 hidden"><img id="previewImg" class="max-h-40 rounded border" alt="Preview of uploaded solution"></div>
+              </div>
+              <button onclick="runChecker()" id="checkerBtn" class="bg-brand text-white px-5 py-2 rounded-lg hover:bg-brandDark transition disabled:opacity-50" aria-label="Check my answer">Check My Answer</button>
+            </div>
+            <div id="checkerLoading" class="mt-4 hidden"><span class="loader"></span> <span class="text-sm text-gray-500 ml-2">Analyzing your answer…</span></div>
+            <div id="checkerResult" class="mt-4 hidden"></div>
+          </div>
+        </div>
+
+        <!-- PANEL: Summary Book -->
+        <div id="panel-summary" class="tab-panel hidden fade-in" role="tabpanel">
+          <div class="max-w-3xl mx-auto">
+            <h3 class="text-xl font-bold mb-1">📓 Revision Summary Book</h3>
+            <p class="text-gray-500 text-sm mb-4">Generate a print-ready, high-yield revision summary.</p>
+            <div class="flex gap-3 mb-4">
+              <button onclick="runSummary('chapter')" id="summaryChBtn" class="bg-brand text-white px-5 py-2 rounded-lg hover:bg-brandDark transition disabled:opacity-50" aria-label="Generate chapter summary">📄 This Chapter</button>
+              <button onclick="runSummary('full')" id="summaryFullBtn" class="border border-brand text-brand px-5 py-2 rounded-lg hover:bg-indigo-50 transition disabled:opacity-50" aria-label="Generate full syllabus summary">📚 Full Syllabus</button>
+            </div>
+            <div id="summaryLoading" class="mt-4 hidden"><span class="loader"></span> <span class="text-sm text-gray-500 ml-2">Generating summary…</span></div>
+            <div id="summaryResult" class="mt-4 hidden"></div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ═══ ADD TOPIC MODAL ═══ -->
+<div id="addTopicModal" class="fixed inset-0 bg-black/40 z-50 hidden flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Add a topic">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 fade-in">
+    <h3 class="font-bold text-lg mb-3">Add Topic</h3>
+    <div class="space-y-3">
+      <div>
+        <label for="addChapterSelect" class="block text-sm font-medium mb-1">Chapter</label>
+        <select id="addChapterSelect" class="w-full border rounded-lg px-3 py-2 text-sm" aria-label="Select chapter"></select>
+      </div>
+      <div>
+        <label for="addTopicName" class="block text-sm font-medium mb-1">Topic Name</label>
+        <input id="addTopicName" type="text" placeholder="e.g., Dijkstra's Algorithm" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand focus:outline-none" aria-label="New topic name">
+      </div>
+      <div class="flex gap-2 pt-1">
+        <button onclick="closeAddTopic()" class="flex-1 border rounded-lg py-2 text-sm hover:bg-gray-50">Cancel</button>
+        <button onclick="addTopic()" class="flex-1 bg-brand text-white rounded-lg py-2 text-sm hover:bg-brandDark">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// SyllabusOS Frontend — All state in localStorage
+// ═══════════════════════════════════════════════════════════════════════════
+
+mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+
+// ── State ───────────────────────────────────────────────────────────────
+let state = JSON.parse(localStorage.getItem('syllabusOS') || 'null') || {
+  student: null,       // { name, education }
+  syllabus: null,      // { chapters: [...] }
+  activeTopic: null,   // { chapterId, chapterTitle, topicId, topicTitle }
+  mastered: {},        // { topicId: true }
+  studyTime: {},       // { topicId: seconds }
+};
+
+let timerInterval = null;
+let diagQuestions = null;  // current diagnostic questions
+
+function saveState() { localStorage.setItem('syllabusOS', JSON.stringify(state)); }
+
+// ── Sample Syllabi ──────────────────────────────────────────────────────
+const SAMPLES = {
+  ds: `Unit 1: Introduction to Data Structures
+- Arrays: 1D arrays, 2D arrays, operations on arrays
+- Linked Lists: Singly linked list, doubly linked list, circular linked list
+- Stacks: Stack operations, applications, expression evaluation
+
+Unit 2: Trees and Graphs
+- Binary Trees: Traversals (inorder, preorder, postorder), BST
+- AVL Trees: Rotations, insertion, deletion
+- Graphs: BFS, DFS, shortest path algorithms (Dijkstra, Bellman-Ford)
+
+Unit 3: Sorting and Searching
+- Sorting: Bubble sort, merge sort, quick sort, heap sort, radix sort
+- Searching: Linear search, binary search, hashing
+- Hash Tables: Collision resolution, open addressing, chaining
+
+Unit 4: Advanced Data Structures
+- Heaps: Min-heap, max-heap, priority queue
+- Tries: Insertion, search, applications
+- Segment Trees: Range queries, lazy propagation`,
+
+  physics: `Unit 1: Wave Optics
+- Interference: Young's double slit experiment, thin film interference, Newton's rings
+- Diffraction: Fraunhofer diffraction, single slit, diffraction grating
+- Polarization: Malus's law, Brewster's angle, double refraction
+
+Unit 2: Quantum Mechanics
+- Black Body Radiation: Planck's hypothesis, Wien's law, Stefan-Boltzmann law
+- Photoelectric Effect: Einstein's equation, stopping potential, work function
+- Wave-Particle Duality: de Broglie hypothesis, Heisenberg uncertainty principle
+- Schrödinger Wave Equation: Time-dependent and time-independent forms
+
+Unit 3: Semiconductor Physics
+- Band Theory: Conductors, insulators, semiconductors
+- P-N Junction: Forward bias, reverse bias, V-I characteristics
+- Transistors: BJT, FET, amplifier configurations
+- Optoelectronic Devices: LED, photodiode, solar cell
+
+Unit 4: Electromagnetism
+- Maxwell's Equations: Differential and integral forms
+- Electromagnetic Waves: Properties, Poynting vector, radiation pressure
+- Waveguides: Rectangular waveguide, modes of propagation`
+};
+
+function loadSample(key) {
+  document.getElementById('syllabusInput').value = SAMPLES[key];
+}
+
+// ── Onboarding ──────────────────────────────────────────────────────────
+document.getElementById('onboardForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('studentName').value.trim();
+  const education = document.getElementById('education').value.trim();
+  const syllabus = document.getElementById('syllabusInput').value.trim();
+  const errEl = document.getElementById('onboardError');
+  const btn = document.getElementById('startBtn');
+
+  if (!name || !education) { errEl.textContent = 'Please fill in your name and education.'; errEl.classList.remove('hidden'); return; }
+  if (!syllabus) { errEl.textContent = 'Please paste a syllabus or load a sample.'; errEl.classList.remove('hidden'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Parsing syllabus…';
+  errEl.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/parse-syllabus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ syllabus_text: syllabus }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    state.student = { name, education };
+    state.syllabus = data;
+    saveState();
+    showApp();
+  } catch (err) {
+    errEl.textContent = err.message || 'Failed to parse syllabus.';
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 Start Learning';
+  }
+});
+
+// ── Boot ────────────────────────────────────────────────────────────────
+if (state.student && state.syllabus) {
+  document.getElementById('onboarding').classList.add('hidden');
+  showApp();
+} 
+
+function showApp() {
+  document.getElementById('onboarding').classList.add('hidden');
+  document.getElementById('appShell').classList.remove('hidden');
+  document.getElementById('headerName').textContent = `Hi, ${state.student.name}`;
+  document.getElementById('headerSubject').textContent = state.student.education;
+  renderTree();
+  updateTotalStudyTime();
+  if (state.activeTopic) selectTopic(state.activeTopic.chapterId, state.activeTopic.topicId);
+}
+
+function resetApp() {
+  if (!confirm('Reset all data and start over?')) return;
+  localStorage.removeItem('syllabusOS');
+  location.reload();
+}
+
+// ── Syllabus Tree ───────────────────────────────────────────────────────
+function renderTree() {
+  const container = document.getElementById('syllabusTree');
+  if (!state.syllabus || !state.syllabus.chapters) { container.innerHTML = '<p class="text-gray-400 text-xs p-2">No syllabus loaded.</p>'; return; }
+
+  let html = '';
+  state.syllabus.chapters.forEach(ch => {
+    const chTime = getChapterTime(ch);
+    html += `<div class="mb-2" role="treeitem">
+      <div class="flex items-center justify-between px-2 py-1.5 bg-gray-50 rounded font-medium text-xs text-gray-600 cursor-pointer hover:bg-gray-100" onclick="toggleChapter('${ch.id}')">
+        <span>📁 ${esc(ch.title)}</span>
+        <span class="text-gray-400 font-mono">${formatMin(chTime)}</span>
+      </div>
+      <div id="ch-${ch.id}" class="ml-3 mt-1 space-y-0.5">`;
+    ch.topics.forEach(t => {
+      const isMastered = state.mastered[t.id];
+      const topicTime = state.studyTime[t.id] || 0;
+      const isActive = state.activeTopic && state.activeTopic.topicId === t.id;
+      html += `<div class="flex items-center group">
+        <button onclick="selectTopic('${ch.id}','${t.id}')" 
+          class="flex-1 text-left px-2 py-1 rounded text-xs hover:bg-indigo-50 transition truncate ${isActive ? 'bg-indigo-100 text-brand font-semibold' : ''} ${isMastered ? 'topic-mastered' : ''}"
+          aria-label="Select topic: ${esc(t.title)}">
+          ${isMastered ? '✅' : '📄'} ${esc(t.title)}
+        </button>
+        <span class="text-[10px] text-gray-400 font-mono mr-1 w-10 text-right">${formatMin(topicTime)}</span>
+        <button onclick="removeTopic('${ch.id}','${t.id}')" class="opacity-0 group-hover:opacity-100 text-red-300 hover:text-red-500 text-xs px-1" aria-label="Remove topic ${esc(t.title)}">✕</button>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  container.innerHTML = html;
+}
+
+function toggleChapter(chId) {
+  const el = document.getElementById('ch-' + chId);
+  el.classList.toggle('hidden');
+}
+
+function getChapterTime(ch) {
+  return ch.topics.reduce((s, t) => s + (state.studyTime[t.id] || 0), 0);
+}
+
+function formatMin(seconds) {
+  const m = Math.floor(seconds / 60);
+  return m + 'm';
+}
+
+function formatTimer(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function updateTotalStudyTime() {
+  const total = Object.values(state.studyTime).reduce((a, b) => a + b, 0);
+  document.getElementById('totalStudyTime').textContent = `Total study time: ${formatMin(total)}`;
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ── Topic Selection & Timer ─────────────────────────────────────────────
+function selectTopic(chId, tId) {
+  // Stop any existing timer
+  if (timerInterval) clearInterval(timerInterval);
+
+  const ch = state.syllabus.chapters.find(c => c.id === chId);
+  const topic = ch?.topics.find(t => t.id === tId);
+  if (!ch || !topic) return;
+
+  state.activeTopic = { chapterId: chId, chapterTitle: ch.title, topicId: tId, topicTitle: topic.title };
+  saveState();
+
+  // UI
+  document.getElementById('topicBanner').classList.remove('hidden');
+  document.getElementById('tabBar').classList.remove('hidden');
+  document.getElementById('emptyState').classList.add('hidden');
+  document.getElementById('bannerChapter').textContent = ch.title;
+  document.getElementById('bannerTopic').textContent = topic.title;
+  updateMasteredBtn();
+  renderTree();
+
+  // Start timer
+  if (!state.studyTime[tId]) state.studyTime[tId] = 0;
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    state.studyTime[tId]++;
+    updateTimerDisplay();
+    // Save every 10 seconds
+    if (state.studyTime[tId] % 10 === 0) { saveState(); renderTree(); updateTotalStudyTime(); }
+  }, 1000);
+
+  // Reset panels and activate first tab
+  resetPanels();
+  activateTab('diagnose');
+}
+
+function updateTimerDisplay() {
+  if (!state.activeTopic) return;
+  const s = state.studyTime[state.activeTopic.topicId] || 0;
+  document.getElementById('topicTimer').textContent = `⏱ ${formatTimer(s)}`;
+}
+
+// ── Mastered Toggle ─────────────────────────────────────────────────────
+function toggleMastered() {
+  if (!state.activeTopic) return;
+  const id = state.activeTopic.topicId;
+  state.mastered[id] = !state.mastered[id];
+  saveState();
+  updateMasteredBtn();
+  renderTree();
+}
+
+function updateMasteredBtn() {
+  const btn = document.getElementById('masteredBtn');
+  if (!state.activeTopic) return;
+  const m = state.mastered[state.activeTopic.topicId];
+  btn.textContent = m ? '✅ Mastered' : '✓ Mark Mastered';
+  btn.className = m
+    ? 'text-xs border border-green-500 bg-green-50 text-green-700 px-2 py-1 rounded'
+    : 'text-xs border border-green-400 text-green-600 px-2 py-1 rounded hover:bg-green-50';
+}
+
+// ── Add / Remove Topics ─────────────────────────────────────────────────
+function openAddTopic() {
+  const modal = document.getElementById('addTopicModal');
+  const sel = document.getElementById('addChapterSelect');
+  sel.innerHTML = state.syllabus.chapters.map(c => `<option value="${c.id}">${esc(c.title)}</option>`).join('');
+  document.getElementById('addTopicName').value = '';
+  modal.classList.remove('hidden');
+}
+
+function closeAddTopic() {
+  document.getElementById('addTopicModal').classList.add('hidden');
+}
+
+function addTopic() {
+  const chId = document.getElementById('addChapterSelect').value;
+  const name = document.getElementById('addTopicName').value.trim();
+  if (!name) return;
+
+  const ch = state.syllabus.chapters.find(c => c.id === chId);
+  if (!ch) return;
+
+  const newId = chId + '_t' + (ch.topics.length + 1) + '_' + Date.now();
+  ch.topics.push({ id: newId, title: name });
+  saveState();
+  renderTree();
+  closeAddTopic();
+}
+
+function removeTopic(chId, tId) {
+  if (!confirm('Remove this topic?')) return;
+  const ch = state.syllabus.chapters.find(c => c.id === chId);
+  if (!ch) return;
+  ch.topics = ch.topics.filter(t => t.id !== tId);
+  if (state.activeTopic && state.activeTopic.topicId === tId) {
+    state.activeTopic = null;
+    if (timerInterval) clearInterval(timerInterval);
+    document.getElementById('topicBanner').classList.add('hidden');
+    document.getElementById('tabBar').classList.add('hidden');
+    document.getElementById('emptyState').classList.remove('hidden');
+    resetPanels();
+  }
+  delete state.mastered[tId];
+  delete state.studyTime[tId];
+  saveState();
+  renderTree();
+}
+
+// ── Tabs ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+});
+
+function activateTab(tabName) {
+  document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('tab-active'); b.setAttribute('aria-selected', 'false'); });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+  if (btn) { btn.classList.add('tab-active'); btn.setAttribute('aria-selected', 'true'); }
+  const panel = document.getElementById('panel-' + tabName);
+  if (panel) panel.classList.remove('hidden');
+}
+
+function resetPanels() {
+  // Clear all panel results
+  ['diagQuiz','diagResult','diagSubmitBtn','diagLoading','diagAnalyzing',
+   'storyResult','storyLoading',
+   'variantsResult','variantsLoading',
+   'checkerResult','checkerLoading',
+   'summaryResult','summaryLoading'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.classList.add('hidden'); el.innerHTML = el.tagName === 'BUTTON' ? el.textContent : ''; }
+  });
+  diagQuestions = null;
+}
+
+// ── Helper: get active context ──────────────────────────────────────────
+function ctx() {
+  return {
+    topic: state.activeTopic?.topicTitle || '',
+    chapter: state.activeTopic?.chapterTitle || '',
+    subject: state.student?.education || '',
+    education: state.student?.education || '',
+  };
+}
+
+// ── Tab 1: Diagnostic ──────────────────────────────────────────────────
+async function runDiagnostic() {
+  const c = ctx();
+  const btn = document.getElementById('diagStartBtn');
+  const loading = document.getElementById('diagLoading');
+  btn.disabled = true; loading.classList.remove('hidden');
+  document.getElementById('diagQuiz').classList.add('hidden');
+  document.getElementById('diagSubmitBtn').classList.add('hidden');
+  document.getElementById('diagResult').classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/diagnose', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ topic: c.topic, subject: c.subject, education: c.education }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    diagQuestions = data.questions;
+    const container = document.getElementById('diagQuiz');
+    container.innerHTML = diagQuestions.map((q, i) => `
+      <div class="bg-white border rounded-xl p-4 shadow-sm">
+        <p class="font-medium mb-2">${i+1}. ${esc(q.question)}</p>
+        <div class="space-y-1">
+          ${Object.entries(q.options).map(([k,v]) => `
+            <label class="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm">
+              <input type="radio" name="q${q.id}" value="${k}" class="accent-brand" aria-label="Option ${k}">
+              <span><span class="font-medium">${k}.</span> ${esc(v)}</span>
+            </label>`).join('')}
+        </div>
+      </div>`).join('');
+    container.classList.remove('hidden');
+    document.getElementById('diagSubmitBtn').classList.remove('hidden');
+  } catch (err) {
+    document.getElementById('diagQuiz').innerHTML = `<p class="text-red-500">${esc(err.message)}</p>`;
+    document.getElementById('diagQuiz').classList.remove('hidden');
+  } finally {
+    btn.disabled = false; loading.classList.add('hidden');
+  }
+}
+
+async function submitDiagnostic() {
+  if (!diagQuestions) return;
+  const c = ctx();
+
+  // Collect answers
+  let qaDetails = '';
+  diagQuestions.forEach(q => {
+    const sel = document.querySelector(`input[name="q${q.id}"]:checked`);
+    const ans = sel ? sel.value : 'No answer';
+    const correct = ans === q.correct;
+    qaDetails += `Q${q.id}: "${q.question}" | Student answered: ${ans} | Correct: ${q.correct} | ${correct ? 'CORRECT' : 'WRONG'} | Explanation: ${q.explanation}\n`;
+  });
+
+  const submitBtn = document.getElementById('diagSubmitBtn');
+  const analyzing = document.getElementById('diagAnalyzing');
+  submitBtn.classList.add('hidden');
+  analyzing.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ topic: c.topic, subject: c.subject, qa_details: qaDetails }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const result = document.getElementById('diagResult');
+    const scoreColor = data.readiness_score >= 70 ? 'text-green-600' : data.readiness_score >= 40 ? 'text-yellow-600' : 'text-red-600';
+    
+    result.innerHTML = `
+      <div class="bg-white border rounded-xl p-5 shadow-sm fade-in">
+        <div class="flex items-center gap-4 mb-4">
+          <div class="text-center">
+            <div class="text-3xl font-bold ${scoreColor}">${data.readiness_score}%</div>
+            <div class="text-xs text-gray-400">Readiness Score</div>
+          </div>
+          <div class="text-sm text-gray-600">${data.total_correct}/${data.total_questions} correct</div>
+        </div>
+        <p class="text-sm text-gray-700 mb-3">${esc(data.feedback)}</p>
+        ${data.gaps && data.gaps.length > 0 ? `
+          <h4 class="font-semibold text-sm mb-2 text-red-600">📌 Knowledge Gaps:</h4>
+          <div class="space-y-2">
+            ${data.gaps.map(g => `
+              <div class="bg-red-50 border border-red-100 rounded-lg p-3 text-sm">
+                <p class="font-medium text-red-700">${esc(g.gap)}</p>
+                <p class="text-gray-600 mt-1">💡 ${esc(g.suggestion)}</p>
+              </div>`).join('')}
+          </div>` : '<p class="text-green-600 font-medium text-sm">🎉 No gaps found! Great understanding.</p>'}
+      </div>`;
+    result.classList.remove('hidden');
+  } catch (err) {
+    const result = document.getElementById('diagResult');
+    result.innerHTML = `<p class="text-red-500">${esc(err.message)}</p>`;
+    result.classList.remove('hidden');
+  } finally {
+    analyzing.classList.add('hidden');
+  }
+}
+
+// ── Tab 2: Story & Diagram ──────────────────────────────────────────────
+async function runStory() {
+  const c = ctx();
+  const btn = document.getElementById('storyBtn');
+  const loading = document.getElementById('storyLoading');
+  const result = document.getElementById('storyResult');
+  btn.disabled = true; loading.classList.remove('hidden'); result.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/explain-story', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ topic: c.topic, subject: c.subject, education: c.education }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    result.innerHTML = `
+      <div class="bg-white border rounded-xl p-6 shadow-sm fade-in">
+        <h3 class="text-lg font-bold mb-3">${esc(data.title)}</h3>
+        <div class="markdown-body mb-4">${renderMarkdown(data.story)}</div>
+        <div class="mb-4">
+          <h4 class="font-semibold text-sm mb-2">🔑 Key Takeaways</h4>
+          <ul class="list-disc ml-5 text-sm space-y-1">
+            ${data.key_takeaways.map(t => `<li>${esc(t)}</li>`).join('')}
+          </ul>
+        </div>
+        ${data.mermaid_diagram ? `
+          <h4 class="font-semibold text-sm mb-2">📊 Concept Diagram</h4>
+          <div class="bg-gray-50 rounded-lg p-4 overflow-x-auto">
+            <div class="mermaid">${data.mermaid_diagram}</div>
+          </div>` : ''}
+      </div>`;
+    result.classList.remove('hidden');
+
+    // Render Mermaid
+    if (data.mermaid_diagram) {
+      try { await mermaid.run({ nodes: result.querySelectorAll('.mermaid') }); } catch(e) { console.warn('Mermaid render error:', e); }
+    }
+  } catch (err) {
+    result.innerHTML = `<p class="text-red-500">${esc(err.message)}</p>`;
+    result.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; loading.classList.add('hidden');
+  }
+}
+
+// ── Tab 3: Variants ─────────────────────────────────────────────────────
+async function runVariants() {
+  const q = document.getElementById('variantInput').value.trim();
+  if (!q) { alert('Please enter a question.'); return; }
+  const c = ctx();
+  const btn = document.getElementById('variantsBtn');
+  const loading = document.getElementById('variantsLoading');
+  const result = document.getElementById('variantsResult');
+  btn.disabled = true; loading.classList.remove('hidden'); result.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/variants', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ question: q, topic: c.topic, subject: c.subject, education: c.education }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const diffColors = { 'Easy': 'bg-green-50 border-green-200', 'Medium': 'bg-yellow-50 border-yellow-200', 'Exam-Trap': 'bg-red-50 border-red-200' };
+    const diffBadge = { 'Easy': 'bg-green-100 text-green-700', 'Medium': 'bg-yellow-100 text-yellow-700', 'Exam-Trap': 'bg-red-100 text-red-700' };
+
+    result.innerHTML = data.variants.map((v, i) => `
+      <div class="border rounded-xl p-5 shadow-sm fade-in ${diffColors[v.difficulty] || 'bg-white'}">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xs font-bold px-2 py-0.5 rounded ${diffBadge[v.difficulty] || ''}">${esc(v.difficulty)}</span>
+        </div>
+        <p class="font-medium text-sm mb-3">${esc(v.question)}</p>
+        <details class="text-sm">
+          <summary class="cursor-pointer text-brand font-medium hover:underline">Show Solution</summary>
+          <div class="mt-2 markdown-body bg-white/60 rounded-lg p-3">${renderMarkdown(v.solution)}</div>
+        </details>
+      </div>`).join('');
+    result.classList.remove('hidden');
+  } catch (err) {
+    result.innerHTML = `<p class="text-red-500">${esc(err.message)}</p>`;
+    result.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; loading.classList.add('hidden');
+  }
+}
+
+// ── Tab 4: Answer Checker ───────────────────────────────────────────────
+document.getElementById('checkerImage').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  const preview = document.getElementById('imagePreview');
+  const img = document.getElementById('previewImg');
+  if (file) {
+    img.src = URL.createObjectURL(file);
+    preview.classList.remove('hidden');
+  } else {
+    preview.classList.add('hidden');
+  }
+});
+
+async function runChecker() {
+  const question = document.getElementById('checkerQuestion').value.trim();
+  if (!question) { alert('Please enter the question.'); return; }
+  const answer = document.getElementById('checkerAnswer').value.trim();
+  const imageFile = document.getElementById('checkerImage').files[0];
+  if (!answer && !imageFile) { alert('Provide a typed answer or upload a photo.'); return; }
+
+  const c = ctx();
+  const btn = document.getElementById('checkerBtn');
+  const loading = document.getElementById('checkerLoading');
+  const result = document.getElementById('checkerResult');
+  btn.disabled = true; loading.classList.remove('hidden'); result.classList.add('hidden');
+
+  try {
+    const formData = new FormData();
+    formData.append('question', question);
+    formData.append('topic', c.topic);
+    formData.append('subject', c.subject);
+    if (imageFile) {
+      formData.append('image', imageFile);
+    } else {
+      formData.append('answer', answer);
+    }
+
+    const res = await fetch('/api/check-answer', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const icon = data.is_correct ? '✅' : '❌';
+    const bg = data.is_correct ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
+
+    result.innerHTML = `
+      <div class="border rounded-xl p-5 shadow-sm fade-in ${bg}">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-2xl">${icon}</span>
+          <span class="font-bold text-lg">${data.is_correct ? 'Correct!' : 'Mistake Found'}</span>
+          <span class="text-sm text-gray-500 ml-auto">Score: ${esc(data.score || 'N/A')}</span>
+        </div>
+        ${data.transcribed_answer ? `<div class="bg-white/60 rounded-lg p-3 mb-3 text-sm"><strong>What we read:</strong> ${esc(data.transcribed_answer)}</div>` : ''}
+        ${data.mistake_step ? `<div class="mb-3"><h4 class="font-semibold text-sm text-red-700 mb-1">📌 Mistake at:</h4><p class="text-sm">${esc(data.mistake_step)}</p></div>` : ''}
+        <div class="mb-3"><h4 class="font-semibold text-sm mb-1">Explanation:</h4><p class="text-sm">${esc(data.explanation)}</p></div>
+        ${data.corrected_solution ? `<details class="text-sm"><summary class="cursor-pointer text-brand font-medium hover:underline">View Corrected Solution</summary><div class="mt-2 markdown-body bg-white/60 rounded-lg p-3">${renderMarkdown(data.corrected_solution)}</div></details>` : ''}
+        ${data.tips && data.tips.length ? `<div class="mt-3"><h4 class="font-semibold text-sm mb-1">💡 Tips:</h4><ul class="list-disc ml-5 text-sm space-y-1">${data.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>` : ''}
+      </div>`;
+    result.classList.remove('hidden');
+  } catch (err) {
+    result.innerHTML = `<p class="text-red-500">${esc(err.message)}</p>`;
+    result.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; loading.classList.add('hidden');
+  }
+}
+
+// ── Tab 5: Summary Book ────────────────────────────────────────────────
+async function runSummary(scope) {
+  const c = ctx();
+  const chBtn = document.getElementById('summaryChBtn');
+  const fullBtn = document.getElementById('summaryFullBtn');
+  const loading = document.getElementById('summaryLoading');
+  const result = document.getElementById('summaryResult');
+  chBtn.disabled = true; fullBtn.disabled = true; loading.classList.remove('hidden'); result.classList.add('hidden');
+
+  // Build content string based on scope
+  let content = '';
+  if (scope === 'chapter') {
+    const ch = state.syllabus.chapters.find(c2 => c2.id === state.activeTopic.chapterId);
+    if (ch) content = ch.title + ': ' + ch.topics.map(t => t.title).join(', ');
+  } else {
+    content = state.syllabus.chapters.map(ch => ch.title + ': ' + ch.topics.map(t => t.title).join(', ')).join('\n');
+  }
+
+  try {
+    const res = await fetch('/api/summary-book', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ subject: c.subject, education: c.education, scope, content }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    let html = `<div class="bg-white border rounded-xl shadow-sm fade-in">
+      <div class="p-5 border-b flex items-center justify-between">
+        <h3 class="text-lg font-bold">${esc(data.title)}</h3>
+        <button onclick="printSummary()" class="text-sm border border-brand text-brand px-3 py-1 rounded hover:bg-indigo-50" aria-label="Print or download summary">🖨 Print / PDF</button>
+      </div>
+      <div id="summaryPrintArea" class="p-6 markdown-body">`;
+    data.sections.forEach(s => {
+      html += `<h2>${esc(s.heading)}</h2>${renderMarkdown(s.content)}`;
+    });
+    if (data.quick_reference) {
+      html += `<hr class="my-4"><h2>⚡ Quick Reference Card</h2>${renderMarkdown(data.quick_reference)}`;
+    }
+    html += `</div></div>`;
+    result.innerHTML = html;
+    result.classList.remove('hidden');
+  } catch (err) {
+    result.innerHTML = `<p class="text-red-500">${esc(err.message)}</p>`;
+    result.classList.remove('hidden');
+  } finally {
+    chBtn.disabled = false; fullBtn.disabled = false; loading.classList.add('hidden');
+  }
+}
+
+function printSummary() {
+  const content = document.getElementById('summaryPrintArea');
+  if (!content) return;
+  const win = window.open('', '_blank');
+  win.document.write(`<html><head><title>Revision Summary</title><style>body{font-family:system-ui,sans-serif;max-width:800px;margin:2rem auto;padding:0 1rem;line-height:1.6}h1{font-size:1.5rem}h2{font-size:1.25rem;margin-top:1.5rem}h3{font-size:1.1rem}ul{list-style:disc;margin-left:1.5rem}ol{list-style:decimal;margin-left:1.5rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:0.4rem 0.6rem}th{background:#f5f5f5}code{background:#f0f0f0;padding:1px 4px;border-radius:3px}pre{background:#f0f0f0;padding:0.75rem;border-radius:6px;overflow-x:auto}blockquote{border-left:3px solid #6366f1;padding-left:0.75rem;color:#666}hr{margin:1.5rem 0}@media print{body{margin:0}}</style></head><body>${content.innerHTML}</body></html>`);
+  win.document.close();
+  win.print();
+}
+
+// ── Simple Markdown Renderer ────────────────────────────────────────────
+function renderMarkdown(text) {
+  if (!text) return '';
+  let html = esc(text);
+  // Code blocks
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Bold & italic
+  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Blockquote
+  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  // Unordered list
+  html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+  // Fix nested ul
+  html = html.replace(/<\/ul>\s*<ul>/g, '');
+  // Ordered list
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // HR
+  html = html.replace(/^---$/gm, '<hr>');
+  // Paragraphs
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = html.replace(/\n/g, '<br>');
+  html = '<p>' + html + '</p>';
+  // Clean up empty paragraphs
+  html = html.replace(/<p>\s*<\/p>/g, '');
+  html = html.replace(/<p>\s*(<h[123]>)/g, '$1');
+  html = html.replace(/(<\/h[123]>)\s*<\/p>/g, '$1');
+  html = html.replace(/<p>\s*(<ul>)/g, '$1');
+  html = html.replace(/(<\/ul>)\s*<\/p>/g, '$1');
+  html = html.replace(/<p>\s*(<pre>)/g, '$1');
+  html = html.replace(/(<\/pre>)\s*<\/p>/g, '$1');
+  html = html.replace(/<p>\s*(<blockquote>)/g, '$1');
+  html = html.replace(/(<\/blockquote>)\s*<\/p>/g, '$1');
+  html = html.replace(/<p>\s*(<hr>)/g, '$1');
+  return html;
+}
+
+// ── Keyboard Navigation ─────────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.getElementById('addTopicModal').classList.add('hidden');
+  }
+});
+</script>
+</body>
+</html>
